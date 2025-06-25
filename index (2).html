@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="main.css">
+    <title>Modern Tic Tac Toe</title>
+</head>
+<body>
+    <button class="theme-toggle" id="themeToggle">
+        <svg id="sun-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+        <svg id="moon-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+    </button>
+
+    <div class="container">
+        <h1>Tic Tac Toe</h1>
+        
+        <div class="controls">
+            <button id="pvpBtn" class="active">Player vs Player</button>
+            <button id="pvaiBtn">Player vs AI</button>
+        </div>
+        
+        <div class="difficulty" id="difficultyControls">
+            <button id="easyBtn" class="active">Easy</button>
+            <button id="mediumBtn">Medium</button>
+            <button id="hardBtn">Impossible</button>
+        </div>
+        
+        <div class="status" id="status">X's turn</div>
+        
+        <div class="board" id="board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+        
+        <button id="resetBtn" class="reset-btn">New Game</button>
+    </div>
+
+    <script>
+        const board = document.getElementById('board');
+        const cells = document.querySelectorAll('.cell');
+        const status = document.getElementById('status');
+        const resetBtn = document.getElementById('resetBtn');
+        const pvpBtn = document.getElementById('pvpBtn');
+        const pvaiBtn = document.getElementById('pvaiBtn');
+        const themeToggle = document.getElementById('themeToggle');
+        const sunIcon = document.getElementById('sun-icon');
+        const moonIcon = document.getElementById('moon-icon');
+        const difficultyControls = document.getElementById('difficultyControls');
+        const easyBtn = document.getElementById('easyBtn');
+        const mediumBtn = document.getElementById('mediumBtn');
+        const hardBtn = document.getElementById('hardBtn');
+
+        let currentPlayer = 'x';
+        let gameState = ['', '', '', '', '', '', '', '', ''];
+        let gameActive = true;
+        let againstAI = false;
+        let aiDifficulty = 'easy'; // 'easy', 'medium', 'hard'
+        let winningLine = null;
+
+        const winningConditions = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+            [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+            [0, 4, 8], [2, 4, 6]             // Diagonals
+        ];
+
+        // Initialize the game
+        function initGame() {
+            cells.forEach(cell => {
+                cell.classList.remove('x', 'o');
+                cell.innerHTML = '';
+            });
+            gameState = ['', '', '', '', '', '', '', '', ''];
+            currentPlayer = 'x';
+            gameActive = true;
+            status.textContent = `X's turn`;
+            
+            // Remove any existing win line
+            const existingLine = document.querySelector('.win-line');
+            if (existingLine) {
+                existingLine.remove();
+            }
+            
+            // Remove any existing confetti
+            const confetti = document.querySelectorAll('.confetti');
+            confetti.forEach(c => c.remove());
+        }
+
+        // Handle cell click
+        function handleCellClick(e) {
+            const cell = e.target;
+            const index = parseInt(cell.getAttribute('data-index'));
+
+            // Ignore if cell is already filled or game is not active
+            if (gameState[index] !== '' || !gameActive) return;
+
+            // Update the game state
+            gameState[index] = currentPlayer;
+            cell.classList.add(currentPlayer);
+
+            // Check for win or draw
+            if (checkWin()) {
+                gameActive = false;
+                status.textContent = `${currentPlayer.toUpperCase()} wins!`;
+                createWinLine();
+                createConfetti();
+                return;
+            }
+
+            if (checkDraw()) {
+                gameActive = false;
+                status.textContent = "It's a draw!";
+                return;
+            }
+
+            // Switch player
+            currentPlayer = currentPlayer === 'x' ? 'o' : 'x';
+            status.textContent = `${currentPlayer.toUpperCase()}'s turn`;
+
+            // If playing against AI and it's AI's turn
+            if (againstAI && currentPlayer === 'o' && gameActive) {
+                setTimeout(makeAIMove, 600);
+            }
+        }
+
+        // Check for a win
+        function checkWin() {
+            for (let i = 0; i < winningConditions.length; i++) {
+                const [a, b, c] = winningConditions[i];
+                if (
+                    gameState[a] !== '' &&
+                    gameState[a] === gameState[b] &&
+                    gameState[a] === gameState[c]
+                ) {
+                    winningLine = i;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Check for a draw
+        function checkDraw() {
+            return !gameState.includes('');
+        }
+
+        // Create winning line
+        function createWinLine() {
+            const line = document.createElement('div');
+            line.classList.add('win-line');
+            
+            const [a, b, c] = winningConditions[winningLine];
+            
+            // Determine line type (horizontal, vertical, diagonal)
+            if (a % 3 === 0 && b % 3 === 1 && c % 3 === 2) {
+                // Horizontal line
+                const row = Math.floor(a / 3);
+                line.classList.add(`h${row}`);
+            } else if (a < 3 && b >= 3 && b < 6 && c >= 6) {
+                // Vertical line
+                const col = a % 3;
+                line.classList.add(`v${col}`);
+            } else {
+                // Diagonal line
+                line.classList.add(a === 0 ? 'd0' : 'd1');
+            }
+            
+            board.appendChild(line);
+        }
+
+        // Create confetti
+        function createConfetti() {
+            const colors = ['#f43f5e', '#3b82f6', '#6366f1', '#f59e0b', '#10b981'];
+            
+            for (let i = 0; i < 100; i++) {
+                const confetti = document.createElement('div');
+                confetti.classList.add('confetti');
+                
+                confetti.style.left = `${Math.random() * 100}vw`;
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.width = `${Math.random() * 10 + 5}px`;
+                confetti.style.height = `${Math.random() * 10 + 5}px`;
+                confetti.style.animationDuration = `${Math.random() * 3 + 2}s`;
+                
+                document.body.appendChild(confetti);
+                
+                // Remove confetti after animation
+                setTimeout(() => {
+                    confetti.remove();
+                }, 5000);
+            }
+        }
+
+        // AI move logic
+        function makeAIMove() {
+            if (!gameActive) return;
+            
+            let move;
+            switch (aiDifficulty) {
+                case 'easy':
+                    move = makeRandomMove();
+                    break;
+                case 'medium':
+                    move = Math.random() < 0.7 ? makeMediumMove() : makeRandomMove();
+                    break;
+                case 'hard':
+                    move = minimax(gameState, 'o').index;
+                    break;
+                default:
+                    move = makeRandomMove();
+            }
+            
+            // Update game state with AI move
+            gameState[move] = 'o';
+            cells[move].classList.add('o');
+
+            // Check for win or draw
+            if (checkWin()) {
+                gameActive = false;
+                status.textContent = "O wins!";
+                createWinLine();
+                return;
+            }
+
+            if (checkDraw()) {
+                gameActive = false;
+                status.textContent = "It's a draw!";
+                return;
+            }
+
+            // Switch back to player
+            currentPlayer = 'x';
+            status.textContent = "X's turn";
+        }
+
+        // Random AI move (Easy difficulty)
+        function makeRandomMove() {
+            // Find all empty cells
+            const emptyCells = gameState.reduce((acc, cell, index) => {
+                if (cell === '') acc.push(index);
+                return acc;
+            }, []);
+            
+            // Return random empty cell
+            return emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        }
+
+        // Medium difficulty AI
+        function makeMediumMove() {
+            // Check if AI can win in the next move
+            for (let i = 0; i < gameState.length; i++) {
+                if (gameState[i] === '') {
+                    gameState[i] = 'o';
+                    if (checkWin()) {
+                        gameState[i] = '';
+                        return i;
+                    }
+                    gameState[i] = '';
+                }
+            }
+            
+            // Check if player can win in the next move and block
+            for (let i = 0; i < gameState.length; i++) {
+                if (gameState[i] === '') {
+                    gameState[i] = 'x';
+                    if (checkWin()) {
+                        gameState[i] = '';
+                        return i;
+                    }
+                    gameState[i] = '';
+                }
+            }
+            
+            // If center is free, take it
+            if (gameState[4] === '') {
+                return 4;
+            }
+            
+            // Otherwise, make a random move
+            return makeRandomMove();
+        }
+
+        // Minimax algorithm for Impossible difficulty
+        function minimax(board, player) {
+            // Available spots
+            const availSpots = board.reduce((acc, cell, index) => {
+                if (cell === '') acc.push(index);
+                return acc;
+            }, []);
+            
+            // Check for terminal states
+            if (checkWinForMinimax(board, 'x')) {
+                return { score: -10 };
+            } else if (checkWinForMinimax(board, 'o')) {
+                return { score: 10 };
+            } else if (availSpots.length === 0) {
+                return { score: 0 };
+            }
+            
+            // Collect scores from each empty spot
+            const moves = [];
+            
+            for (let i = 0; i < availSpots.length; i++) {
+                const move = {};
+                move.index = availSpots[i];
+                
+                // Set the empty spot to the current player
+                board[availSpots[i]] = player;
+                
+                // Collect the score from minimax call
+                if (player === 'o') {
+                    const result = minimax(board, 'x');
+                    move.score = result.score;
+                } else {
+                    const result = minimax(board, 'o');
+                    move.score = result.score;
+                }
+                
+                // Reset the spot
+                board[availSpots[i]] = '';
+                
+                // Push move to moves array
+                moves.push(move);
+            }
+            
+            // Find best move
+            let bestMove;
+            if (player === 'o') {
+                let bestScore = -Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    if (moves[i].score > bestScore) {
+                        bestScore = moves[i].score;
+                        bestMove = i;
+                    }
+                }
+            } else {
+                let bestScore = Infinity;
+                for (let i = 0; i < moves.length; i++) {
+                    if (moves[i].score < bestScore) {
+                        bestScore = moves[i].score;
+                        bestMove = i;
+                    }
+                }
+            }
+            
+            return moves[bestMove];
+        }
+
+        // Check win for minimax
+        function checkWinForMinimax(board, player) {
+            for (let i = 0; i < winningConditions.length; i++) {
+                const [a, b, c] = winningConditions[i];
+                if (
+                    board[a] === player &&
+                    board[a] === board[b] &&
+                    board[a] === board[c]
+                ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Event listeners
+        cells.forEach(cell => {
+            cell.addEventListener('click', handleCellClick);
+        });
+
+        resetBtn.addEventListener('click', initGame);
+
+        pvpBtn.addEventListener('click', () => {
+            pvpBtn.classList.add('active');
+            pvaiBtn.classList.remove('active');
+            againstAI = false;
+            difficultyControls.classList.remove('visible');
+            initGame();
+        });
+
+        pvaiBtn.addEventListener('click', () => {
+            pvaiBtn.classList.add('active');
+            pvpBtn.classList.remove('active');
+            againstAI = true;
+            difficultyControls.classList.add('visible');
+            initGame();
+        });
+
+        easyBtn.addEventListener('click', () => {
+            easyBtn.classList.add('active');
+            mediumBtn.classList.remove('active');
+            hardBtn.classList.remove('active');
+            aiDifficulty = 'easy';
+            initGame();
+        });
+
+        mediumBtn.addEventListener('click', () => {
+            mediumBtn.classList.add('active');
+            easyBtn.classList.remove('active');
+            hardBtn.classList.remove('active');
+            aiDifficulty = 'medium';
+            initGame();
+        });
+
+        hardBtn.addEventListener('click', () => {
+            hardBtn.classList.add('active');
+            easyBtn.classList.remove('active');
+            mediumBtn.classList.remove('active');
+            aiDifficulty = 'hard';
+            initGame();
+        });
+
+        themeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+            if (document.body.classList.contains('dark-mode')) {
+                sunIcon.style.display = 'none';
+                moonIcon.style.display = 'block';
+            } else {
+                sunIcon.style.display = 'block';
+                moonIcon.style.display = 'none';
+            }
+        });
+
+        // Initialize the game
+        initGame();
+    </script>
+</body>
+</html>
